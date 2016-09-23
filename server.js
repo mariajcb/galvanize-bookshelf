@@ -51,9 +51,9 @@ const session = require('./routes/session');
 const users = require('./routes/users');
 
 app.use('/books', books);
-app.use('favorites', favorites);
-app.use('session', session);
-app.use('users', users);
+app.use('/users', users);
+app.use('/favorites', favorites);
+app.use('/session', session);
 
 app.use((_req, res) => {
   res.sendStatus(404);
