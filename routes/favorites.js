@@ -6,42 +6,73 @@ const knex = require('../knex');
 const bcrypt = require('bcrypt');
 const boom = require('boom');
 const humps = require('humps');
+const cookieSession = require('cookie-session');
 
-router.get('/', function(req, res, next) {
-  if (req.session.userId) {
-    res.send(true)
-  } else {
-    res.send(false)
+const authorize = function(req, res, next){
+  if(!req.session.userId) {
+    return next(boom.create(401, 'Unauthorized'));
   }
-})
+  next();
+}
 
-router.post('/', function(req, res, next) {
-  knex('users')
-  .where('email', req.body.email)
-  .first()
-  .then(function(results) {
-    if (!results) {
-      throw boom.create(400, 'Bad email or password')
-        } else {
-        var user = results
-            var passwordMatch = bcrypt.compareSync(req.body.password, user.hashed_password)
-            if (passwordMatch === false) {
-                throw boom.create(400, 'Bad email or password')
-            } else {
-              delete user.hashed_password
-              req.session.userId = user
-              res.send(humps.camelizeKeys(user))
-            }
+router.get('/', authorize, function(req, res, next) {
+  knex('favorites')
+  .innerJoin('books', 'favorites.book_id', 'books.id')
+  .where('favorites.user_id', 1)
+  .then((results) => {
+    let favorites = humps.camelizeKeys(results);
+    res.json(favorites);
+  })
+  .catch((err) => {
+  next(err);
+});
+});
+
+
+router.get('/:id', authorize, function(req, res, next) {
+  knex('favorites')
+  .where('book_id', req.query.bookId)
+  .then((favorites) => {
+    if (favorites.length === 0) {
+      res.send(false);
+    } else {
+      res.send(true);
     }
   })
   .catch((err) => {
-    next(err);
-  })
+  next(err);
+});
 });
 
-router.delete('/', (req, res) => {
-  req.session = null;
-  res.send(true);
+
+router.post('/', authorize, (req, res, next) => {
+  knex('favorites')
+    .returning(['id', 'book_id', 'user_id'])
+    .insert({
+      'user_id': 1,
+      'book_id': req.body.bookId
+    })
+    .then((favorite) => {
+        res.send(humps.camelizeKeys(favorite[0]));
+    })
+    .catch((err) => {
+    next(err);
+  });
 });
+
+
+router.delete('/', authorize, (req, res, next) => {
+  knex('favorites')
+  .returning(['book_id', 'user_id'])
+  .where('book_id', req.body.bookId)
+  .del()
+  .then((favorite) => {
+    res.json(humps.camelizeKeys(favorite[0]));
+  })
+.catch((err) => {
+    next(err);
+  });
+});
+
 
 module.exports = router;
